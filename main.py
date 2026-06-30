@@ -10,10 +10,19 @@ import os
 import discord
 from discord.ext import commands
 from discord import Object
+import dotenv
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 # CONFIG – set these
-YOUTUBE_STATE_FILE = Path("youtube_state.json")
+data_file = os.getenv("data_file", "/data")
+os.makedirs(data_file, exist_ok=True)
+YOUTUBE_STATE_FILE = os.pth.join(data_file, "youtube_state.json")
+
+
+
 TEST_GUILD_ID: int = 1313681001377038377  # replace with your test guild id or 0
 YOUTUBE_LIVE_DEST_CHANNEL_ID = 1521360464783605838
 YOUTUBE_VIDEO_DEST_CHANNEL_ID = 1521360464783605838
@@ -237,7 +246,6 @@ class MainBot(commands.Bot):
 # ------------- RUN BOT -------------
 if __name__ == "__main__":
     # Option A: env var
-    token = os.getenv("DISCORD_TOKEN")
 
     # Option B: hard-code token (easier, less safe)
     # token = "YOUR_BOT_TOKEN_HERE"
@@ -246,4 +254,4 @@ if __name__ == "__main__":
         raise RuntimeError("Bot token not set. Set DISCORD_TOKEN or hard-code it.")
 
     bot = MainBot()
-    bot.run(token)
+    bot.run(os.getenv("token"))
