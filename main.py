@@ -247,5 +247,13 @@ class MainBot(commands.Bot):
 if __name__ == "__main__":
     # Option A: env var
 
+token = os.getenv("DISCORD_TOKEN")  # or "token" if you prefer that name
+
+if not token:
+    raise RuntimeError("Bot token missing: set DISCORD_TOKEN in Railway variables.")
+
+bot.run(token)
+
+
+    
     bot = MainBot()
-    bot.run(os.getenv("token"))
