@@ -247,11 +247,5 @@ class MainBot(commands.Bot):
 if __name__ == "__main__":
     # Option A: env var
 
-    # Option B: hard-code token (easier, less safe)
-    # token = "YOUR_BOT_TOKEN_HERE"
-
-    if not token:
-        raise RuntimeError("Bot token not set. Set DISCORD_TOKEN or hard-code it.")
-
     bot = MainBot()
     bot.run(os.getenv("token"))
