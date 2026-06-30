@@ -9,6 +9,10 @@ import aiohttp
 import discord
 from discord.ext import commands, tasks
 from discord import Object
+import dotenv
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # ---------------- CONFIG ----------------
 INTENTS = discord.Intents.default()
