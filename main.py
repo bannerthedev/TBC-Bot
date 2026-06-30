@@ -19,7 +19,7 @@ load_dotenv()
 # CONFIG – set these
 data_file = os.getenv("data_file", "/data")
 os.makedirs(data_file, exist_ok=True)
-YOUTUBE_STATE_FILE = os.pth.join(data_file, "youtube_state.json")
+YOUTUBE_STATE_FILE = os.path.join(data_file, "youtube_state.json")
 
 
 
