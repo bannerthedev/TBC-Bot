@@ -22,10 +22,9 @@ data_file = os.getenv("data_file", "/data")
 os.makedirs(data_file, exist_ok=True)
 
 TEST_GUILD_ID: int = 1313681001377038377  # your server ID
-YOUTUBE_STATE_FILE = os.pth.join(data_file, "youtube_state.json")
+YOUTUBE_STATE_FILE = Path(data_file) / "youtube_state.json"
 YOUTUBE_LIVE_DEST_CHANNEL_ID = 1521360464783605838
 YOUTUBE_VIDEO_DEST_CHANNEL_ID = 1521360464783605838
-
 
 # ---------------- YOUTUBE COG ----------------
 def load_youtube_state() -> dict:
