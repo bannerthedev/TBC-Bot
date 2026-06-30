@@ -1,32 +1,26 @@
 from __future__ import annotations
+import os
 import json
 from pathlib import Path
 import xml.etree.ElementTree as ET
+from typing import List
+
 import aiohttp
 import discord
 from discord.ext import commands, tasks
-from typing import List
-import os
-import discord
-from discord.ext import commands
 from discord import Object
-import dotenv
-from dotenv import load_dotenv
 
-load_dotenv()
+# ---------------- CONFIG ----------------
+INTENTS = discord.Intents.default()
+INTENTS.message_content = True
 
-
-# CONFIG – set these
-data_file = os.getenv("data_file", "/data")
-os.makedirs(data_file, exist_ok=True)
+TEST_GUILD_ID: int = 1313681001377038377  # your server ID
 YOUTUBE_STATE_FILE = os.path.join(data_file, "youtube_state.json")
-
-
-
-TEST_GUILD_ID: int = 1313681001377038377  # replace with your test guild id or 0
 YOUTUBE_LIVE_DEST_CHANNEL_ID = 1521360464783605838
 YOUTUBE_VIDEO_DEST_CHANNEL_ID = 1521360464783605838
 
+
+# ---------------- YOUTUBE COG ----------------
 def load_youtube_state() -> dict:
     if not YOUTUBE_STATE_FILE.is_file():
         return {}
@@ -52,20 +46,18 @@ class YouTubePollerCog(commands.Cog):
 
     - Lives -> YOUTUBE_LIVE_DEST_CHANNEL_ID (ping @everyone)
     - VOD  -> YOUTUBE_VIDEO_DEST_CHANNEL_ID (ping @everyone)
-    - Waiting/upcoming/premiere -> ignored (but advances state)
     """
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.channel_id = "UCrGjDSsGCwensGughwNtxUA"  # change if needed
+        # your YouTube channel ID (UC...)
+        self.channel_id = "UCrGjDSsGCwensGughwNtxUA"
         self.feed_url = f"https://www.youtube.com/feeds/videos.xml?channel_id={self.channel_id}"
         self.state = load_youtube_state()  # { "last_video_id": str }
         self.poll_task.start()
 
     def cog_unload(self):
         self.poll_task.cancel()
-
-    # ---------- helpers ----------
 
     def _get_video_url(self, entry: ET.Element) -> str:
         ns = {
@@ -81,13 +73,10 @@ class YouTubePollerCog(commands.Cog):
         return ""
 
     def _classify_entry(self, entry: ET.Element) -> str:
-        """
-        Return one of: 'live', 'vod', 'ignore'.
-        """
         title = (entry.findtext("{http://www.w3.org/2005/Atom}title") or "").strip()
         t_lower = title.lower()
 
-        # 1) Check yt:liveBroadcast tag explicitly
+        # explicit liveBroadcast tag
         for child in entry:
             if child.tag.endswith("liveBroadcast"):
                 txt = (child.text or "").strip().lower()
@@ -97,13 +86,11 @@ class YouTubePollerCog(commands.Cog):
                     return "live"
                 return "ignore"
 
-        # 2) No liveBroadcast tag — use heuristics on title
+        # heuristics
         if any(word in t_lower for word in ("waiting", "upcoming", "premiere")):
             return "ignore"
-
         if ("live" in t_lower or "stream" in t_lower) and "upcoming" not in t_lower:
             return "live"
-
         return "vod"
 
     async def _fetch_feed(self) -> List[ET.Element]:
@@ -123,8 +110,6 @@ class YouTubePollerCog(commands.Cog):
         entries = root.findall("atom:entry", ns)
         return entries or []
 
-    # ---------- loop ----------
-
     @tasks.loop(minutes=5)
     async def poll_task(self):
         await self.bot.wait_until_ready()
@@ -135,7 +120,6 @@ class YouTubePollerCog(commands.Cog):
         ns = {"yt": "http://www.youtube.com/xml/schemas/2015"}
         last_seen = self.state.get("last_video_id")
 
-        # collect entries newer than last_seen
         new_entries: List[ET.Element] = []
         for e in entries:
             vid = e.findtext("yt:videoId", default=None, namespaces=ns)
@@ -148,15 +132,14 @@ class YouTubePollerCog(commands.Cog):
         if not new_entries:
             return
 
-        # process from oldest to newest
         new_entries.reverse()
 
         if not self.bot.guilds:
             return
         guild = next((g for g in self.bot.guilds if g.id == TEST_GUILD_ID), self.bot.guilds[0])
 
-        live_dest = guild.get_channel(YOUTUBE_LIVE_DEST_CHANNEL_ID) if YOUTUBE_LIVE_DEST_CHANNEL_ID else None
-        video_dest = guild.get_channel(YOUTUBE_VIDEO_DEST_CHANNEL_ID) if YOUTUBE_VIDEO_DEST_CHANNEL_ID else None
+        live_dest = guild.get_channel(YOUTUBE_LIVE_DEST_CHANNEL_ID)
+        video_dest = guild.get_channel(YOUTUBE_VIDEO_DEST_CHANNEL_ID)
 
         newest_vid_id = last_seen
 
@@ -167,27 +150,25 @@ class YouTubePollerCog(commands.Cog):
 
             title = e.findtext("{http://www.w3.org/2005/Atom}title") or "Video"
             url = self._get_video_url(e)
-            kind = self._classify_entry(e)  # 'live', 'vod', or 'ignore'
+            kind = self._classify_entry(e)
 
             if kind == "ignore":
                 newest_vid_id = vid
                 continue
 
-            if kind == "live":
-                if isinstance(live_dest, discord.TextChannel):
-                    body = f"@everyone\n\n# [{title}]({url})"
-                    try:
-                        await live_dest.send(body, allowed_mentions=discord.AllowedMentions(everyone=True))
-                    except Exception:
-                        pass
+            if kind == "live" and isinstance(live_dest, discord.TextChannel):
+                body = f"@everyone\n\n# [{title}]({url})"
+                try:
+                    await live_dest.send(body, allowed_mentions=discord.AllowedMentions(everyone=True))
+                except Exception:
+                    pass
 
-            elif kind == "vod":
-                if isinstance(video_dest, discord.TextChannel):
-                    body = f"@everyone\n\n# Watch {title}\n\n{url}"
-                    try:
-                        await video_dest.send(body, allowed_mentions=discord.AllowedMentions(everyone=True))
-                    except Exception:
-                        pass
+            if kind == "vod" and isinstance(video_dest, discord.TextChannel):
+                body = f"@everyone\n\n# Watch {title}\n\n{url}"
+                try:
+                    await video_dest.send(body, allowed_mentions=discord.AllowedMentions(everyone=True))
+                except Exception:
+                    pass
 
             newest_vid_id = vid
 
@@ -200,25 +181,16 @@ class YouTubePollerCog(commands.Cog):
         await self.bot.wait_until_ready()
 
 
-def setup(bot: commands.Bot):
-    bot.add_cog(YouTubePollerCog(bot))
-
-
-# ---------------- BOT SETUP ----------------
-
-# intents
-INTENTS = discord.Intents.default()
-INTENTS.message_content = True  # only needed if you want to read messages
-
+# ---------------- MAIN BOT ----------------
 class MainBot(commands.Bot):
     def __init__(self):
         super().__init__(command_prefix="!", intents=INTENTS)
-        self._web_runner: None = None  # keep type simple
 
     async def setup_hook(self):
         guild_obj = Object(id=TEST_GUILD_ID)
+
         cog_names = [
-            "YouTubePollerCog",  # only this cog for now
+            "YouTubePollerCog",  # add more cog class names here if they live in this file
         ]
 
         for name in cog_names:
@@ -243,17 +215,13 @@ class MainBot(commands.Bot):
             print("Failed to sync commands.")
 
 
-# ------------- RUN BOT -------------
+# ---------------- RUN ----------------
 if __name__ == "__main__":
-    # Option A: env var
-
-token = os.getenv("DISCORD_TOKEN")  # or "token" if you prefer that name
-
-if not token:
-    raise RuntimeError("Bot token missing: set DISCORD_TOKEN in Railway variables.")
-
-bot.run(token)
-
-
-    
     bot = MainBot()
+
+    token = os.getenv("DISCORD_TOKEN")  # set this in Railway
+
+    if not token:
+        raise RuntimeError("Bot token missing: set DISCORD_TOKEN in Railway variables.")
+
+    bot.run(token)
